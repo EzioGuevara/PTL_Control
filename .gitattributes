@@ -1,0 +1,23 @@
+* text=auto
+
+# Visual Studio, .NET, firmware, configuration, and documentation files.
+*.sln     text eol=crlf
+*.csproj  text eol=crlf
+*.vbproj  text eol=crlf
+*.cs      text eol=crlf
+*.vb      text eol=crlf
+*.resx    text eol=crlf
+*.ino     text eol=crlf
+*.json    text eol=crlf
+*.md      text eol=crlf
+
+# Scripts commonly executed outside Windows keep Unix line endings.
+*.sh      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+
+# Binary artifacts.
+*.dll     binary
+*.pdb     binary
+*.png     binary
+*.pdf     binary

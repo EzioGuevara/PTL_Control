@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    {
+      "key": "A1",
+      "alias": "",
+      "tagId": "AD100000048F",
+      "group": 1,
+      "layer": 1,
+      "index": 5
+    },
+    {
+      "key": "A2",
+      "alias": "",
+      "tagId": "AD1000000490",
+      "group": 1,
+      "layer": 1,
+      "index": 8
+    }
+  ]
+}

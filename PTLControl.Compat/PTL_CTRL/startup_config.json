@@ -1,0 +1,22 @@
+{
+  "logLevel": "Info",
+  "connectionMode": "serial",
+  "serial": {
+    "portName": "COM3"
+  },
+  "mqtt": {
+    "broker": "127.0.0.1",
+    "port": 1883,
+    "username": "test",
+    "password": "123456",
+    "eStationId": "90A9F7300000",
+    "qos": 1,
+    "keepAliveSec": 30
+  },
+  "wirelessDefaults": {
+    "taskTimeSlot": 5,
+    "blinkTimeSlot": 5,
+    "beepDefault": false,
+    "heartbeatTimeoutSec": 90
+  }
+}

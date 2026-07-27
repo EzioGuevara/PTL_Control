@@ -1,0 +1,103 @@
+{
+  "rows": [
+    {
+      "layer": 1,
+      "cells": [
+        { "key": "A1", "index": 5 },
+        { "key": "A2", "index": 8 },
+        { "key": "A3", "index": 11 },
+        { "key": "A4", "index": 15 },
+        { "key": "A5", "index": 19 },
+        { "key": "A6", "index": 22 },
+        { "key": "A7", "index": 26 },
+        { "key": "A8", "index": 30 },
+        { "key": "A9", "index": 34 },
+        { "key": "A10", "index": 37 },
+        { "key": "A11", "index": 41 },
+        { "key": "A12", "index": 45 },
+        { "key": "A13", "index": 49 },
+        { "key": "A14", "index": 52 },
+        { "key": "A15", "index": 56 },
+        { "key": "A16", "index": 59 },
+        { "key": "A17", "index": 63 },
+        { "key": "A18", "index": 67 },
+        { "key": "A19", "index": 71 }
+      ]
+    },
+    {
+      "layer": 2,
+      "cells": [
+        { "key": "B1", "index": 4 },
+        { "key": "B2", "index": 7 },
+        { "key": "B3", "index": 11 },
+        { "key": "B4", "index": 15 },
+        { "key": "B5", "index": 19 },
+        { "key": "B6", "index": 22 },
+        { "key": "B7", "index": 26 },
+        { "key": "B8", "index": 30 },
+        { "key": "B9", "index": 33 },
+        { "key": "B10", "index": 37 },
+        { "key": "B11", "index": 41 },
+        { "key": "B12", "index": 45 },
+        { "key": "B13", "index": 49 },
+        { "key": "B14", "index": 52 },
+        { "key": "B15", "index": 56 },
+        { "key": "B16", "index": 60 },
+        { "key": "B17", "index": 63 },
+        { "key": "B18", "index": 67 },
+        { "key": "B19", "index": 71 },
+        { "key": "B20", "index": 74 }
+      ]
+    },
+    {
+      "layer": 3,
+      "cells": [
+        { "key": "C1", "index": 6 },
+        { "key": "C2", "index": 12 },
+        { "key": "C3", "index": 19 },
+        { "key": "C4", "index": 25 },
+        { "key": "C5", "index": 31 },
+        { "key": "C6", "index": 38 },
+        { "key": "C7", "index": 44 },
+        { "key": "C8", "index": 51 },
+        { "key": "C9", "index": 57 },
+        { "key": "C10", "index": 64 },
+        { "key": "C11", "index": 71 },
+        { "key": "C12", "index": 74 }
+      ]
+    },
+    {
+      "layer": 4,
+      "cells": [
+        { "key": "D1", "index": 6 },
+        { "key": "D2", "index": 11 },
+        { "key": "D3", "index": 18 },
+        { "key": "D4", "index": 24 },
+        { "key": "D5", "index": 31 },
+        { "key": "D6", "index": 37 },
+        { "key": "D7", "index": 44 },
+        { "key": "D8", "index": 50 },
+        { "key": "D9", "index": 57 },
+        { "key": "D10", "index": 63 },
+        { "key": "D11", "index": 70 },
+        { "key": "D12", "index": 74 }
+      ]
+    },
+    {
+      "layer": 5,
+      "cells": [
+        { "key": "E1", "index": 9 },
+        { "key": "E2", "index": 15 },
+        { "key": "E3", "index": 22 },
+        { "key": "E4", "index": 28 },
+        { "key": "E5", "index": 34 },
+        { "key": "E6", "index": 41 },
+        { "key": "E7", "index": 48 },
+        { "key": "E8", "index": 54 },
+        { "key": "E9", "index": 61 },
+        { "key": "E10", "index": 67 },
+        { "key": "E11", "index": 74 }
+      ]
+    }
+  ]
+}
