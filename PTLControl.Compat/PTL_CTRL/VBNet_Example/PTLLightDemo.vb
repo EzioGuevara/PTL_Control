@@ -1,6 +1,6 @@
 ' ============================================================
 ' PTL LED Matrix Control System - VB.NET 4.7.2 调用示例
-' Developer: Ezio @ IDEMIA
+' Developer: Ezio Li @ IDEMIA
 ' 
 ' 前置条件：
 '   1. 将 PTLControl.Compat.dll（及依赖项）复制到你的 VB 项目 bin 目录

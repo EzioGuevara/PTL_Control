@@ -28,8 +28,8 @@
   "mqtt": {
     "broker": "192.168.172.172",
     "port": 2026,
-    "username": "idemia",
-    "password": "123456",
+    "username": "",
+    "password": "",
     "eStationId": "90A9F73014A5",
     "qos": 1,
     "keepAliveSec": 30

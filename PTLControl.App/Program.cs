@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Application entry point.
 // ============================================================
 using System.Windows.Forms;

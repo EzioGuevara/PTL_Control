@@ -61,7 +61,9 @@ namespace PTLControl.Compat.Services
 
         public static void Error(string message, Exception ex)
         {
-            var detail = ex == null ? string.Empty : " | 异常：" + ex.GetType().Name + " - " + ex.Message;
+            var detail = ex == null
+                ? string.Empty
+                : " | 完整异常：" + Environment.NewLine + ex;
             Write(LogLevelValue.Error, message + detail);
         }
 

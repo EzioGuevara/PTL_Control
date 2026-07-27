@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Main window - serial connection, barcode scan,
 //              light control buttons, mapping & matrix test.
 // ============================================================
@@ -32,6 +32,7 @@ public partial class MainForm : Form
     private readonly Label _lblMode = new Label();
     private readonly ComboBox _cmbMode = new ComboBox();
     private readonly Button _btnSaveConnConfig = new Button();
+    private readonly Button _btnAbout = new Button();
     private readonly Label _lblMqttHost = new Label();
     private readonly Label _lblMqttPort = new Label();
     private readonly Label _lblMqttUser = new Label();
@@ -433,6 +434,14 @@ public partial class MainForm : Form
             AppendLog($"已保存启动配置：mode={_startup.ConnectionMode}");
         };
 
+        _btnAbout.Text = "关于";
+        _btnAbout.Size = new Size(64, 26);
+        _btnAbout.Click += (_, __) =>
+        {
+            using var form = new AboutForm();
+            form.ShowDialog(this);
+        };
+
         _lblLogLevel.Text = "日志：";
         _lblLogLevel.AutoSize = true;
         _lblLogLevel.Margin = new Padding(10, 6, 4, 0);
@@ -456,6 +465,7 @@ public partial class MainForm : Form
         _modePanel.Controls.Add(_btnSaveConnConfig);
         _modePanel.Controls.Add(_lblLogLevel);
         _modePanel.Controls.Add(_cmbLogLevel);
+        _modePanel.Controls.Add(_btnAbout);
     }
 
     private void SetupBeepUi()
@@ -676,7 +686,7 @@ public partial class MainForm : Form
         _startup.WirelessDefaults ??= new WirelessDefaultsConfig();
         _startup.Serial.PortName = cmbPorts.SelectedItem?.ToString() ?? string.Empty;
         _startup.Mqtt.Broker = _txtMqttHost.Text.Trim();
-        if (!int.TryParse(_txtMqttPort.Text.Trim(), out var port)) port = 1883;
+        if (!int.TryParse(_txtMqttPort.Text.Trim(), out var port)) port = 2026;
         _startup.Mqtt.Port = port;
         _startup.Mqtt.Username = _txtMqttUser.Text.Trim();
         _startup.Mqtt.Password = _txtMqttPwd.Text;

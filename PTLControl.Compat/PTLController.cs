@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System - .NET Standard 2.0 Compat
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Public API for LED light control via serial port.
 //              Supports multi-light independent control, blink,
 //              marquee, and color presets (LedColor enum).
@@ -93,7 +93,7 @@ namespace PTLControl.Compat
                 {
                     // 为了避免上层未捕获导致崩溃，连接失败改为记录并返回；
                     // 调用方可通过 IsConnected 判断当前连接状态。
-                    LogService.Warn("Connect 失败：" + ex.Message);
+                    LogService.Error("Connect 失败。", ex);
                     return false;
                 }
             }

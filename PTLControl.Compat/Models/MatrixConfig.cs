@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System - .NET Standard 2.0 Compat
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Matrix configuration models for serial_mapping.json.
 // ============================================================
 using System.Collections.Generic;

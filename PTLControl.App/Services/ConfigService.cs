@@ -37,7 +37,7 @@ public static class ConfigService
             Mqtt = new MqttStartupConfig
             {
                 Broker = compat.Mqtt?.Broker ?? "127.0.0.1",
-                Port = compat.Mqtt?.Port ?? 1883,
+                Port = compat.Mqtt?.Port ?? 2026,
                 Username = compat.Mqtt?.Username ?? string.Empty,
                 Password = compat.Mqtt?.Password ?? string.Empty,
                 EStationId = compat.Mqtt?.EStationId ?? string.Empty,
@@ -67,7 +67,7 @@ public static class ConfigService
             Mqtt = new PTLControl.Compat.Models.MqttStartupConfig
             {
                 Broker = startup?.Mqtt?.Broker ?? "127.0.0.1",
-                Port = startup?.Mqtt?.Port ?? 1883,
+                Port = startup?.Mqtt?.Port ?? 2026,
                 Username = startup?.Mqtt?.Username ?? string.Empty,
                 Password = startup?.Mqtt?.Password ?? string.Empty,
                 EStationId = startup?.Mqtt?.EStationId ?? string.Empty,

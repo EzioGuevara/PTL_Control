@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Predefined LED color enum and RGB mapping.
 // ============================================================
 namespace PTLControl.Models;

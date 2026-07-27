@@ -18,7 +18,7 @@ namespace PTLControl.Compat.Models
     public class MqttStartupConfig
     {
         public string Broker { get; set; } = "127.0.0.1";
-        public int Port { get; set; } = 1883;
+        public int Port { get; set; } = 2026;
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public string EStationId { get; set; } = string.Empty;

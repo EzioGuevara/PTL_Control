@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Authors>Ezio Li</Authors>
+    <Company>IDEMIA</Company>
+    <Product>PTL Control</Product>
+    <Description>Serial and MQTT pick-to-light control software.</Description>
+    <Copyright>Copyright © 2026 Ezio Li / IDEMIA</Copyright>
+  </PropertyGroup>
+</Project>

@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System - .NET Standard 2.0 Compat
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Read/write serial_mapping/startup/mqtt mapping config
 //              (compatible with .NET Framework 4.7.2)
 // ============================================================
@@ -178,7 +178,7 @@ namespace PTLControl.Compat.Services
             if (string.IsNullOrWhiteSpace(normalized.Mqtt.Broker))
                 normalized.Mqtt.Broker = "127.0.0.1";
             if (normalized.Mqtt.Port <= 0)
-                normalized.Mqtt.Port = 1883;
+                normalized.Mqtt.Port = 2026;
             if (normalized.Mqtt.Qos < 0 || normalized.Mqtt.Qos > 2)
                 normalized.Mqtt.Qos = 1;
             if (normalized.Mqtt.KeepAliveSec <= 0)

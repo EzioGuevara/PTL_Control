@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Public API for LED light control via serial port.
 //              Supports multi-light independent control, blink,
 //              marquee, and color presets (LedColor enum).

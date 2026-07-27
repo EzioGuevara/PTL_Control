@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Serial command formatting and parsing.
 //              Protocol: <Layer,Index,R,G,B> / <OFF>
 // ============================================================

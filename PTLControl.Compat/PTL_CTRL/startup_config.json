@@ -6,9 +6,9 @@
   },
   "mqtt": {
     "broker": "127.0.0.1",
-    "port": 1883,
-    "username": "test",
-    "password": "123456",
+    "port": 2026,
+    "username": "",
+    "password": "",
     "eStationId": "90A9F7300000",
     "qos": 1,
     "keepAliveSec": 30

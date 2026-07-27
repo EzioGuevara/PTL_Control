@@ -1,6 +1,6 @@
 // ============================================================
 // PTL LED Matrix Control System - .NET Standard 2.0 Compat
-// Developer: Ezio @ IDEMIA
+// Developer: Ezio Li @ IDEMIA
 // Description: Singleton serial port service. Thread-safe write.
 // ============================================================
 using System;

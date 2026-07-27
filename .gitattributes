@@ -10,6 +10,7 @@
 *.ino     text eol=crlf
 *.json    text eol=crlf
 *.md      text eol=crlf
+*.ps1     text eol=crlf
 
 # Scripts commonly executed outside Windows keep Unix line endings.
 *.sh      text eol=lf
