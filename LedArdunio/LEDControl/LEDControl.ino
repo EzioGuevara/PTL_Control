@@ -1,5 +1,5 @@
 // ============================================================
-// PTL LED Control — Arduino Nano (FastLED / WS2812B)
+// PTL LED Control — ESP32 Dev Module (FastLED / WS2812B)
 // Protocol (与 PTLControl.Compat CommandService 对齐):
 //   <Layer,Index,R,G,B>  单灯设置（可叠加，不清全屏；RGB=0,0,0 即关该灯）
 //   <OFF> / <CLEAR>      全灭
@@ -21,12 +21,14 @@
 #define DEFAULT_BRIGHTNESS 128
 #define BOOT_CLEAR_TIMES 3
 
-// 数据脚：Layer1..5 → D2..D6
-#define STRIP_PIN_1 2
-#define STRIP_PIN_2 3
-#define STRIP_PIN_3 4
-#define STRIP_PIN_4 5
-#define STRIP_PIN_5 6
+// 数据脚：Layer1..5 → GPIO18, GPIO19, GPIO21, GPIO22, GPIO23
+// 对应当前 30 针 ESP32 DevKit 板上标出的 D18/D19/D21/D22/D23。
+// 避开启动配置脚、输入专用脚以及串口下载使用的 RX0/TX0。
+#define STRIP_PIN_1 18
+#define STRIP_PIN_2 19
+#define STRIP_PIN_3 21
+#define STRIP_PIN_4 22
+#define STRIP_PIN_5 23
 
 CRGB leds[NUM_STRIPS][PHYSICAL_LEDS_PER_STRIP];
 
@@ -246,7 +248,7 @@ void setup() {
 
   initStrips();
 
-  Serial.println(F("PTL Nano Ready."));
+  Serial.println(F("PTL ESP32 Ready."));
   Serial.print(F("Strips="));
   Serial.print(NUM_STRIPS);
   Serial.print(F(" LEDs/strip="));
