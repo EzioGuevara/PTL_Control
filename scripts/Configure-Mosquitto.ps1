@@ -6,7 +6,7 @@ param(
     [ValidatePattern('^(?:\d{1,3}\.){3}\d{1,3}$')]
     [string]$ListenAddress = '192.168.172.172',
 
-    [string]$AllowedRemoteAddress = '192.168.172.173',
+    [string]$AllowedRemoteAddress = '192.168.172.0/24',
 
     [switch]$NoPause
 )
@@ -33,6 +33,35 @@ function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Test-TcpPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Address,
+
+        [Parameter(Mandatory = $true)]
+        [int]$TargetPort,
+
+        [int]$TimeoutMs = 3000
+    )
+
+    $client = New-Object Net.Sockets.TcpClient
+    try {
+        $result = $client.BeginConnect($Address, $TargetPort, $null, $null)
+        if (-not $result.AsyncWaitHandle.WaitOne($TimeoutMs)) {
+            return $false
+        }
+
+        $client.EndConnect($result)
+        return $true
+    }
+    catch {
+        return $false
+    }
+    finally {
+        $client.Dispose()
+    }
 }
 
 if (-not (Test-Administrator)) {
@@ -168,7 +197,7 @@ Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue
 
 New-NetFirewallRule `
     -DisplayName $firewallRuleName `
-    -Description "Allow eStation MQTT traffic to Mosquitto on TCP $Port." `
+    -Description "Allow PTL MQTT traffic from $AllowedRemoteAddress on TCP $Port." `
     -Direction Inbound `
     -Action Allow `
     -Protocol TCP `
@@ -178,6 +207,7 @@ New-NetFirewallRule `
     -Profile Any | Out-Null
 
 Write-Host "Firewall rule: $firewallRuleName"
+Write-Host "Allowed remote range: $AllowedRemoteAddress"
 
 Write-Step 'Starting and verifying Mosquitto'
 
@@ -188,16 +218,12 @@ $runningService.WaitForStatus('Running', [TimeSpan]::FromSeconds(15))
 $deadline = [DateTime]::UtcNow.AddSeconds(10)
 $loopbackReady = $false
 do {
-    $client = New-Object Net.Sockets.TcpClient
-    try {
-        $client.Connect('127.0.0.1', $Port)
-        $loopbackReady = $true
-    }
-    catch {
+    $loopbackReady = Test-TcpPort `
+        -Address '127.0.0.1' `
+        -TargetPort $Port `
+        -TimeoutMs 1000
+    if (-not $loopbackReady) {
         Start-Sleep -Milliseconds 500
-    }
-    finally {
-        $client.Dispose()
     }
 } while (-not $loopbackReady -and [DateTime]::UtcNow -lt $deadline)
 
@@ -207,24 +233,54 @@ if (-not $loopbackReady) {
     throw "TCP port $Port verification failed."
 }
 
-$nicClient = New-Object Net.Sockets.TcpClient
-try {
-    $nicResult = $nicClient.BeginConnect($ListenAddress, $Port, $null, $null)
-    $nicReady = $nicResult.AsyncWaitHandle.WaitOne(3000)
-    if ($nicReady) {
-        $nicClient.EndConnect($nicResult)
-    }
-}
-catch {
-    $nicReady = $false
-}
-finally {
-    $nicClient.Dispose()
+$listeners = @(Get-NetTCPConnection `
+    -State Listen `
+    -LocalPort $Port `
+    -ErrorAction SilentlyContinue)
+
+if ($listeners.Count -eq 0) {
+    throw "The service is running, but no TCP listener was found on port $Port."
 }
 
+$listenerAddresses = @($listeners |
+    Select-Object -ExpandProperty LocalAddress -Unique)
+$wildcardListener = $listenerAddresses -contains '0.0.0.0'
+$specificListener = $listenerAddresses -contains $ListenAddress
+
+Write-Host "Actual listener address(es): $($listenerAddresses -join ', ')"
+
+if (-not $wildcardListener -and -not $specificListener) {
+    throw (
+        "Mosquitto is not listening on $ListenAddress. " +
+        "Actual listener address(es): $($listenerAddresses -join ', ')"
+    )
+}
+
+$nicReady = Test-TcpPort `
+    -Address $ListenAddress `
+    -TargetPort $Port `
+    -TimeoutMs 3000
+
+Write-Host "127.0.0.1`:$Port reachable: $loopbackReady"
+Write-Host "$ListenAddress`:$Port reachable: $nicReady"
+
 if (-not $nicReady) {
-    Write-Warning "$ListenAddress`:$Port is not reachable even though Mosquitto is listening on all IPv4 interfaces."
-    Write-Warning 'Check third-party endpoint security or repair the Windows TCP/IP stack.'
+    Write-Host ''
+    Write-Host 'The loopback test passed, but the NIC-address test failed.' `
+        -ForegroundColor Red
+    if ($wildcardListener) {
+        Write-Warning (
+            'Mosquitto is listening on 0.0.0.0. The remaining likely cause is ' +
+            'Windows Filtering Platform, IPsec, or third-party endpoint security.'
+        )
+    }
+    else {
+        Write-Warning 'Mosquitto is not using an IPv4 wildcard listener.'
+    }
+    Write-Warning (
+        "Confirm that the firewall rule remote range includes this network: " +
+        $AllowedRemoteAddress
+    )
 }
 
 $logDeadline = [DateTime]::UtcNow.AddSeconds(5)
@@ -243,9 +299,10 @@ if (Test-Path -LiteralPath $logPath) {
 
 Write-Host ''
 Write-Host 'Mosquitto deployment completed.' -ForegroundColor Green
-Write-Host "Mosquitto listener: 0.0.0.0`:$Port"
+Write-Host "Mosquitto listener(s): $($listenerAddresses -join ', ')`:$Port"
 Write-Host "eStation MQTT server: $ListenAddress`:$Port"
 Write-Host "PTLControl Broker: 127.0.0.1`:$Port"
+Write-Host "Allowed remote range: $AllowedRemoteAddress"
 Write-Host 'Username: leave blank'
 Write-Host 'Password: leave blank'
 Write-Host "Log: $logPath"

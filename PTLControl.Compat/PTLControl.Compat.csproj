@@ -8,14 +8,32 @@
     <Description>PTL LED Matrix Control - compatible library for .NET Framework 4.7.2+ consumers (C#/VB.NET)</Description>
   </PropertyGroup>
 
-  <!-- netstandard2.0 需要 NuGet 版串口包；net472 内置了，不引用 -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-    <PackageReference Include="System.IO.Ports" Version="6.0.0" />
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="MQTTnet" Version="4.2.1.781" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
+
+  <Target Name="CopyHardwareHost" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
+    <MSBuild Projects="..\PTLControl.HardwareHost\PTLControl.HardwareHost.csproj"
+             Targets="Build" Properties="Configuration=$(Configuration)"
+             RemoveProperties="TargetFramework;TargetFrameworks" />
+    <ItemGroup>
+      <HardwareHostFiles Include="..\PTLControl.HardwareHost\bin\$(Configuration)\net472\PTLControl.HardwareHost.exe" />
+      <HardwareHostFiles Include="..\PTLControl.HardwareHost\bin\$(Configuration)\net472\PTLControl.HardwareHost.exe.config" Condition="Exists('..\PTLControl.HardwareHost\bin\$(Configuration)\net472\PTLControl.HardwareHost.exe.config')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(HardwareHostFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyCompatToDelivery" AfterTargets="Build"
+          Condition="'$(Configuration)' == 'Release' and '$(TargetFramework)' == 'net472'">
+    <ItemGroup>
+      <CompatDeliveryFiles Include="$(TargetPath)" />
+      <CompatDeliveryFiles Include="$(TargetDir)$(AssemblyName).pdb"
+                           Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CompatDeliveryFiles)"
+          DestinationFolder="$(MSBuildProjectDirectory)\PTL_CTRL\net472"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

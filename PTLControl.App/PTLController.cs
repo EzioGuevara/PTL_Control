@@ -46,6 +46,7 @@ public static class PTLController
     public static void Connect(string portName) => CompatController.Connect(portName);
     public static void Disconnect() => CompatController.Disconnect();
     public static bool IsConnected => CompatController.IsConnected;
+    public static string LastConnectionMessage => CompatController.LastConnectionMessage;
 
     // ── 核心灯控接口（枚举颜色版，推荐调用方使用）─────────────────────────
 

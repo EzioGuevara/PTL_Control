@@ -1,442 +1,340 @@
-// ============================================================
-// PTL LED Matrix Control System - .NET Standard 2.0 Compat
-// Developer: Ezio Li @ IDEMIA
-// Description: Singleton serial port service. Thread-safe write.
-// ============================================================
 using System;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Ports;
+using System.IO.Pipes;
+using System.Reflection;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text;
-using System.Collections.Generic;
+using Newtonsoft.Json;
 using PTLControl.Compat.Models;
 
 namespace PTLControl.Compat.Services
 {
-    /// <summary>
-    /// 单例串口服务，线程安全写入（lock）。
-    /// </summary>
+    /// <summary>串口代理；所有硬件操作均交给本机 PTLControl.HardwareHost.exe。</summary>
     public sealed class SerialService : IDisposable
     {
-        private const int MaxQueueSize = 2000;
-        private const int SendIntervalMs = 20;
-
+        private const string CommandPipeName = "PTLControl.Hardware.Command.v1";
+        private const string EventPipeName = "PTLControl.Hardware.Event.v1";
         public static readonly SerialService Instance = new SerialService();
 
-        private SerialPort _port;
-        private readonly object _lock = new object();
-        private readonly ConcurrentQueue<string> _sendQueue = new ConcurrentQueue<string>();
-        private readonly AutoResetEvent _queueSignal = new AutoResetEvent(false);
-        private readonly object _receiveLock = new object();
-        private readonly StringBuilder _receiveBuffer = new StringBuilder();
-        private CancellationTokenSource _senderCts;
-        private Task _senderTask;
-        private int _queuedCount;
+        private readonly object _requestLock = new object();
+        private readonly object _eventLock = new object();
+        private NamedPipeClientStream _pipe;
+        private StreamReader _reader;
+        private StreamWriter _writer;
+        private CancellationTokenSource _eventCts;
+        private Task _eventTask;
+        private EventHandler _connectionFaulted;
+        private EventHandler<SerialLineReceivedEventArgs> _lineReceived;
+        private volatile bool _logicalConnected;
+        private string _actualPort;
+        private string _connectionMessage = "尚未连接 HardwareHost。";
+        private bool _disposed;
 
         private SerialService() { }
 
-        /// <summary>串口在后台发送时发生物理连接故障。</summary>
-        public event EventHandler ConnectionFaulted;
-        /// <summary>MCU 返回完整文本行时触发。</summary>
-        public event EventHandler<SerialLineReceivedEventArgs> LineReceived;
+        public event EventHandler ConnectionFaulted
+        {
+            add { lock (_eventLock) _connectionFaulted += value; }
+            remove { lock (_eventLock) _connectionFaulted -= value; }
+        }
 
-        public bool IsOpen => _port != null && _port.IsOpen;
+        public event EventHandler<SerialLineReceivedEventArgs> LineReceived
+        {
+            add { lock (_eventLock) _lineReceived += value; }
+            remove { lock (_eventLock) _lineReceived -= value; }
+        }
 
-        public string[] GetPortNames() => SerialPort.GetPortNames();
+        public bool IsOpen
+        {
+            get
+            {
+                if (!_logicalConnected) return false;
+                try
+                {
+                    var response = Request("status");
+                    _actualPort = response.ActualPort;
+                    _connectionMessage = response.StatusMessage;
+                    return response.IsOpen;
+                }
+                catch (Exception ex) { _connectionMessage = ex.Message; return false; }
+            }
+        }
 
-        /// <summary>打开串口，115200/8N1/WriteTimeout=500ms</summary>
+        public string[] GetPortNames() => Request("ports").Ports ?? new string[0];
+        public string ActualPort => _actualPort ?? string.Empty;
+        public string ConnectionMessage => _connectionMessage ?? string.Empty;
+
         public void Open(string portName)
         {
-            LogService.RefreshLevelFromConfig();
-            var opened = false;
-            lock (_lock)
-            {
-                if (_port != null && _port.IsOpen)
-                    throw new InvalidOperationException("串口已打开");
-
-                var appName = GetHostProgramName();
-                LogService.Info("开始连接串口：" + portName + "，来源程序=" + appName);
-                _port = new SerialPort(portName, 115200, Parity.None, 8, StopBits.One)
-                {
-                    WriteTimeout = 500,
-                    ReadTimeout = 500
-                };
-                _port.DataReceived += OnDataReceived;
-                try
-                {
-                    lock (_receiveLock)
-                        _receiveBuffer.Clear();
-                    _port.Open();
-                    opened = true;
-                    LogService.Info("串口连接成功：" + portName + "（115200/8N1），来源程序=" + appName);
-                }
-                catch (Exception ex)
-                {
-                    LogService.Error("串口连接失败：" + portName + "，来源程序=" + appName, ex);
-                    _port.DataReceived -= OnDataReceived;
-                    try
-                    {
-                        _port.Dispose();
-                    }
-                    catch
-                    {
-                        // 保留原始打开异常。
-                    }
-                    _port = null;
-                    throw;
-                }
-            }
-
-            if (opened)
-                StartSenderLoop();
-        }
-
-        /// <summary>关闭并释放串口</summary>
-        public void Close()
-        {
-            SerialPort portToDispose = null;
-            string name = string.Empty;
-
-            lock (_lock)
-            {
-                if (_port != null)
-                {
-                    name = _port.PortName;
-                    try
-                    {
-                        StopSenderLoopSignalUnsafe();
-                        if (_port.IsOpen)
-                        {
-                            LogService.Info("开始断开串口：" + name);
-                            _port.Close();
-                        }
-                        LogService.Info("串口已断开：" + name);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogService.Error("串口断开异常：" + name, ex);
-                        throw;
-                    }
-                    finally
-                    {
-                        portToDispose = _port;
-                        _port.DataReceived -= OnDataReceived;
-                        _port = null;
-                    }
-                }
-            }
-
-            StopSenderLoopWaitUnsafe();
-            ClearQueueUnsafe();
-            Interlocked.Exchange(ref _queuedCount, 0);
-            lock (_receiveLock)
-                _receiveBuffer.Clear();
-
-            if (portToDispose != null)
-                portToDispose.Dispose();
-        }
-
-        /// <summary>发送指令字符串（线程安全）</summary>
-        public void Send(string cmd)
-        {
-            if (string.IsNullOrWhiteSpace(cmd))
-                return;
-
-            lock (_lock)
-            {
-                if (_port == null || !_port.IsOpen)
-                {
-                    LogService.Warn("发送失败：串口未连接，指令=" + cmd);
-                    throw new InvalidOperationException("串口未连接");
-                }
-            }
-
-            // 统一进入发送队列，避免上层并发/风暴直接冲击串口。
-            EnqueueCommand(cmd);
-        }
-
-        public void Dispose() => Close();
-
-        private void EnqueueCommand(string cmd)
-        {
-            if (string.Equals(cmd, CommandService.OffCommand, StringComparison.Ordinal))
-            {
-                // 全灭是安全指令，应覆盖尚未发送的旧状态，不能在风暴中排到队尾。
-                ClearQueueUnsafe();
-            }
-
-            var count = Interlocked.Increment(ref _queuedCount);
-            if (count > MaxQueueSize)
-            {
-                string dropped;
-                if (_sendQueue.TryDequeue(out dropped))
-                {
-                    Interlocked.Decrement(ref _queuedCount);
-                    LogService.Warn("串口发送队列过长，已丢弃最早指令：" + dropped);
-                }
-            }
-
-            _sendQueue.Enqueue(cmd);
-            _queueSignal.Set();
-        }
-
-        private void StartSenderLoop()
-        {
-            StopSenderLoopSignalUnsafe();
-            StopSenderLoopWaitUnsafe();
-            _senderCts = new CancellationTokenSource();
-            var token = _senderCts.Token;
-            _senderTask = Task.Run(() => SenderLoop(token), token);
-        }
-
-        private void StopSenderLoopSignalUnsafe()
-        {
             try
             {
-                if (_senderCts != null)
-                {
-                    _senderCts.Cancel();
-                    _queueSignal.Set();
-                }
-            }
-            catch
-            {
-                // 忽略停止流程异常，避免影响关闭串口。
-            }
-        }
-
-        private void StopSenderLoopWaitUnsafe()
-        {
-            try
-            {
-                if (_senderTask != null)
-                    _senderTask.Wait(1000);
-            }
-            catch
-            {
-                // 忽略退出等待异常，避免影响关闭串口。
-            }
-            finally
-            {
-                if (_senderCts != null)
-                {
-                    _senderCts.Dispose();
-                    _senderCts = null;
-                }
-                _senderTask = null;
-            }
-        }
-
-        private void ClearQueueUnsafe()
-        {
-            string _;
-            while (_sendQueue.TryDequeue(out _))
-            {
-                Interlocked.Decrement(ref _queuedCount);
-            }
-        }
-
-        private void SenderLoop(CancellationToken token)
-        {
-            var nextSendUtc = DateTime.UtcNow;
-            while (!token.IsCancellationRequested)
-            {
-                string cmd;
-                if (!_sendQueue.TryDequeue(out cmd))
-                {
-                    _queueSignal.WaitOne(50);
-                    continue;
-                }
-
-                Interlocked.Decrement(ref _queuedCount);
-
-                var now = DateTime.UtcNow;
-                if (now < nextSendUtc)
-                {
-                    var waitMs = (int)(nextSendUtc - now).TotalMilliseconds;
-                    if (waitMs > 0)
-                    {
-                        try
-                        {
-                            Task.Delay(waitMs, token).GetAwaiter().GetResult();
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            return;
-                        }
-                    }
-                }
-                nextSendUtc = DateTime.UtcNow.AddMilliseconds(SendIntervalMs);
-
-                try
-                {
-                    lock (_lock)
-                    {
-                        if (_port == null || !_port.IsOpen)
-                        {
-                            LogService.Warn("发送失败：串口未连接，已丢弃指令=" + cmd);
-                            continue;
-                        }
-                        _port.Write(cmd);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    var portName = string.Empty;
-                    lock (_lock)
-                    {
-                        portName = _port != null ? _port.PortName : string.Empty;
-                    }
-
-                    LogService.Error("发送失败，串口=" + portName + "，指令=" + cmd, ex);
-
-                    var connectionFaulted = IsConnectionFault(ex);
-                    if (connectionFaulted)
-                    {
-                        lock (_lock)
-                        {
-                            ResetBrokenPortUnsafe();
-                        }
-                    }
-
-                    if (connectionFaulted)
-                    {
-                        try
-                        {
-                            ConnectionFaulted?.Invoke(this, EventArgs.Empty);
-                        }
-                        catch (Exception eventEx)
-                        {
-                            LogService.Warn("串口断线事件处理异常：" + eventEx.Message);
-                        }
-                    }
-
-                    // 队列线程只记录不抛出，避免上层调用线程被风暴放大。
-                }
-            }
-        }
-
-        private static string GetHostProgramName()
-        {
-            try
-            {
-                var process = Process.GetCurrentProcess();
-                if (!string.IsNullOrWhiteSpace(process.ProcessName))
-                    return process.ProcessName;
-            }
-            catch
-            {
-                // 忽略并回退
-            }
-
-            return AppDomain.CurrentDomain.FriendlyName;
-        }
-
-        private static bool IsConnectionFault(Exception ex)
-        {
-            return ex is TimeoutException
-                || ex is IOException
-                || ex is InvalidOperationException;
-        }
-
-        private void ResetBrokenPortUnsafe()
-        {
-            if (_port == null)
-                return;
-
-            try
-            {
-                if (_port.IsOpen)
-                {
-                    try
-                    {
-                        _port.Close();
-                    }
-                    catch
-                    {
-                        // 保持原始发送异常，不覆盖。
-                    }
-                }
-            }
-            finally
-            {
-                _port.DataReceived -= OnDataReceived;
-                try
-                {
-                    _port.Dispose();
-                }
-                catch
-                {
-                    // 保持原始发送异常，不覆盖。
-                }
-
-                _port = null;
-            }
-        }
-
-        private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
-        {
-            var port = sender as SerialPort;
-            if (port == null)
-                return;
-
-            string chunk;
-            try
-            {
-                chunk = port.ReadExisting();
+                // 为兼容旧调用保留 portName 参数，但物理端口只由宿主读取 startup_config.json 决定。
+                var response = Request("open", null, null);
+                _actualPort = response.ActualPort;
+                _connectionMessage = response.StatusMessage;
+                _logicalConnected = response.IsOpen;
+                if (!_logicalConnected)
+                    throw new InvalidOperationException(_connectionMessage);
+                EnsureEventListener();
             }
             catch (Exception ex)
             {
-                LogService.Warn("读取 MCU 串口返回失败：" + ex.Message);
-                return;
-            }
-
-            if (string.IsNullOrEmpty(chunk))
-                return;
-
-            var lines = new List<string>();
-            lock (_receiveLock)
-            {
-                _receiveBuffer.Append(chunk);
-                while (true)
-                {
-                    var text = _receiveBuffer.ToString();
-                    var newline = text.IndexOf('\n');
-                    if (newline < 0)
-                        break;
-
-                    var line = text.Substring(0, newline).TrimEnd('\r');
-                    _receiveBuffer.Remove(0, newline + 1);
-                    if (!string.IsNullOrWhiteSpace(line))
-                        lines.Add(line);
-                }
-
-                if (_receiveBuffer.Length > 4096)
-                {
-                    LogService.Warn("MCU 串口返回缓冲区过长，已清空。");
-                    _receiveBuffer.Clear();
-                }
-            }
-
-            foreach (var line in lines)
-            {
-                if (line.StartsWith("ERR:", StringComparison.OrdinalIgnoreCase))
-                    LogService.Warn("MCU 返回：" + line);
-                else
-                    LogService.Debug("MCU 返回：" + line);
-
-                try
-                {
-                    LineReceived?.Invoke(this, new SerialLineReceivedEventArgs(line));
-                }
-                catch (Exception ex)
-                {
-                    LogService.Warn("MCU 串口返回事件处理异常：" + ex.Message);
-                }
+                _logicalConnected = false;
+                _connectionMessage = ex.Message;
+                throw;
             }
         }
+
+        public void Close()
+        {
+            _logicalConnected = false;
+            _actualPort = null;
+            _connectionMessage = "当前调用方已逻辑断开；HardwareHost 物理连接不受影响。";
+            lock (_requestLock)
+            {
+                if (_pipe == null || !_pipe.IsConnected)
+                    return;
+                try { RequestUnsafe("close", null, null); }
+                finally { ClosePipeUnsafe(); }
+            }
+        }
+
+        public void Send(string cmd)
+        {
+            if (string.IsNullOrWhiteSpace(cmd)) return;
+            if (!_logicalConnected)
+                throw new InvalidOperationException("当前调用方尚未调用 Connect。");
+            Request("send", null, cmd);
+        }
+
+        internal void SetLight(int layer, int index, int r, int g, int b)
+            => RequestAction("setLight", layer, index, r, g, b, 0, null);
+
+        internal void SetBlink(int layer, int index, int r, int g, int b, int intervalMs)
+            => RequestAction("setBlink", layer, index, r, g, b, intervalMs, null);
+
+        internal void TurnOff(int layer, int index)
+            => RequestAction("turnOff", layer, index, 0, 0, 0, 0, null);
+
+        internal void AllOff()
+            => RequestAction("allOff", 0, 0, 0, 0, 0, 0, null);
+
+        internal void Marquee(int r, int g, int b, int intervalMs, IList<KeyValuePair<int, int>> strips)
+        {
+            var items = new List<BrokerStrip>();
+            if (strips != null)
+                foreach (var strip in strips)
+                    items.Add(new BrokerStrip { Layer = strip.Key, Count = strip.Value });
+            RequestAction("marquee", 0, 0, r, g, b, intervalMs, items);
+        }
+
+        private void RequestAction(string action, int layer, int index, int r, int g, int b, int intervalMs, IList<BrokerStrip> strips)
+        {
+            if (!_logicalConnected)
+                throw new InvalidOperationException("当前调用方尚未调用 Connect。");
+            Request(new BrokerRequest
+            {
+                Action = action, Layer = layer, Index = index, R = r, G = g, B = b,
+                IntervalMs = intervalMs, Strips = strips
+            });
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            try { Close(); } catch { }
+            _disposed = true;
+            lock (_eventLock) { if (_eventCts != null) _eventCts.Cancel(); }
+        }
+
+        private BrokerResponse Request(string action, string port = null, string command = null)
+            => Request(new BrokerRequest { Action = action, Port = port, Command = command });
+
+        private BrokerResponse Request(BrokerRequest request)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(SerialService));
+            lock (_requestLock)
+            {
+                EnsurePipeUnsafe();
+                try { return RequestUnsafe(request); }
+                catch (IOException) { ClosePipeUnsafe(); throw; }
+            }
+        }
+
+        private BrokerResponse RequestUnsafe(string action, string port, string command)
+            => RequestUnsafe(new BrokerRequest { Action = action, Port = port, Command = command });
+
+        private BrokerResponse RequestUnsafe(BrokerRequest request)
+        {
+            request.Id = Guid.NewGuid().ToString("N");
+            request.Client = GetClientName();
+            request.ProtocolVersion = 2;
+            _writer.WriteLine(JsonConvert.SerializeObject(request));
+            var readTask = _reader.ReadLineAsync();
+            if (!readTask.Wait(5000))
+            {
+                ClosePipeUnsafe();
+                throw new TimeoutException("PTL 硬件宿主在 5 秒内没有响应。");
+            }
+            var line = readTask.Result;
+            if (line == null) throw new IOException("PTL 硬件宿主已断开连接。");
+            var response = JsonConvert.DeserializeObject<BrokerResponse>(line);
+            if (response == null || response.Id != request.Id)
+                throw new IOException("PTL 硬件宿主返回了无效响应。");
+            if (response.HostProtocolVersion != 2)
+                throw new InvalidOperationException("PTLControl.Compat 与 HardwareHost 版本不兼容，请成套替换交付文件。");
+            if (!response.Success)
+            {
+                _connectionMessage = response.StatusMessage ?? response.Error;
+                throw new InvalidOperationException(response.Error ?? "PTL 硬件操作失败。");
+            }
+            return response;
+        }
+
+        private void EnsurePipeUnsafe()
+        {
+            if (_pipe != null && _pipe.IsConnected) return;
+            ClosePipeUnsafe();
+            if (TryConnectUnsafe()) return;
+            StartHardwareHost();
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(150);
+                if (TryConnectUnsafe()) return;
+            }
+            throw new InvalidOperationException("无法连接 PTL 硬件宿主。请确认 PTLControl.HardwareHost.exe 与 DLL 位于同一目录且可运行。");
+        }
+
+        private bool TryConnectUnsafe()
+        {
+            try
+            {
+                var pipe = new NamedPipeClientStream(".", CommandPipeName, PipeDirection.InOut, PipeOptions.None);
+                pipe.Connect(750);
+                _pipe = pipe;
+                _reader = new StreamReader(pipe);
+                _writer = new StreamWriter(pipe) { AutoFlush = true };
+                return true;
+            }
+            catch { ClosePipeUnsafe(); return false; }
+        }
+
+        private void ClosePipeUnsafe()
+        {
+            try { if (_writer != null) _writer.Dispose(); } catch { }
+            try { if (_reader != null) _reader.Dispose(); } catch { }
+            try { if (_pipe != null) _pipe.Dispose(); } catch { }
+            _writer = null; _reader = null; _pipe = null;
+        }
+
+        private static void StartHardwareHost()
+        {
+            var baseDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+            var hostPath = Path.Combine(baseDirectory, "PTLControl.HardwareHost.exe");
+            if (!File.Exists(hostPath))
+                throw new FileNotFoundException("缺少 PTL 硬件宿主，无法执行任何串口操作。", hostPath);
+            using (var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = hostPath, WorkingDirectory = baseDirectory,
+                UseShellExecute = true, WindowStyle = ProcessWindowStyle.Normal
+            })) { }
+        }
+
+        private void EnsureEventListener()
+        {
+            lock (_eventLock)
+            {
+                if (_eventTask != null && !_eventTask.IsCompleted) return;
+                _eventCts = new CancellationTokenSource();
+                var token = _eventCts.Token;
+                _eventTask = Task.Run(() => EventLoop(token), token);
+            }
+        }
+
+        private void EventLoop(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    using (var eventPipe = new NamedPipeClientStream(".", EventPipeName, PipeDirection.In))
+                    {
+                        eventPipe.Connect(1000);
+                        using (var eventReader = new StreamReader(eventPipe))
+                        {
+                            while (!token.IsCancellationRequested)
+                            {
+                                var line = eventReader.ReadLine();
+                                if (line == null) break;
+                                DispatchEvent(JsonConvert.DeserializeObject<BrokerEvent>(line));
+                            }
+                        }
+                    }
+                }
+                catch { }
+                if (!token.IsCancellationRequested) Thread.Sleep(500);
+            }
+        }
+
+        private void DispatchEvent(BrokerEvent value)
+        {
+            if (value == null) return;
+            if (string.Equals(value.Type, "line", StringComparison.OrdinalIgnoreCase))
+            {
+                EventHandler<SerialLineReceivedEventArgs> handler;
+                lock (_eventLock) handler = _lineReceived;
+                if (handler != null) handler(this, new SerialLineReceivedEventArgs(value.Line ?? string.Empty));
+            }
+            else if (string.Equals(value.Type, "fault", StringComparison.OrdinalIgnoreCase))
+            {
+                EventHandler handler;
+                lock (_eventLock) handler = _connectionFaulted;
+                if (handler != null) handler(this, EventArgs.Empty);
+            }
+        }
+
+        private static string GetClientName()
+        {
+            try { var p = Process.GetCurrentProcess(); return p.ProcessName + ":" + p.Id; }
+            catch { return AppDomain.CurrentDomain.FriendlyName; }
+        }
+
+        private sealed class BrokerRequest
+        {
+            public int ProtocolVersion { get; set; }
+            public string Id { get; set; }
+            public string Action { get; set; }
+            public string Port { get; set; }
+            public string Command { get; set; }
+            public string Client { get; set; }
+            public int Layer { get; set; }
+            public int Index { get; set; }
+            public int R { get; set; }
+            public int G { get; set; }
+            public int B { get; set; }
+            public int IntervalMs { get; set; }
+            public IList<BrokerStrip> Strips { get; set; }
+        }
+        private sealed class BrokerStrip { public int Layer { get; set; } public int Count { get; set; } }
+        private sealed class BrokerResponse
+        {
+            public string Id { get; set; }
+            public bool Success { get; set; }
+            public string Error { get; set; }
+            public bool IsOpen { get; set; }
+            public string[] Ports { get; set; }
+            public int HostProtocolVersion { get; set; }
+            public string ActualPort { get; set; }
+            public string HostState { get; set; }
+            public string StatusMessage { get; set; }
+            public int HostProcessId { get; set; }
+            public long UptimeSeconds { get; set; }
+            public int QueueLength { get; set; }
+            public string LastError { get; set; }
+        }
+        private sealed class BrokerEvent { public string Type { get; set; } public string Line { get; set; } }
     }
 }

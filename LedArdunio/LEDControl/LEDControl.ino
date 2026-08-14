@@ -42,17 +42,21 @@ Mode currentMode = MODE_IDLE;
 uint16_t marqueePos = 0;
 uint32_t lastMarqueeMs = 0;
 
-bool parseIntToken(char *&p, long &outValue) {
-  while (*p != '\0' && isspace(static_cast<unsigned char>(*p))) {
+bool parseIntToken(char *&p, long &outValue) 
+{
+  while (*p != '\0' && isspace(static_cast<unsigned char>(*p))) 
+  {
     p++;
   }
-  if (*p == '\0') {
+  if (*p == '\0') 
+  {
     return false;
   }
 
   char *endPtr = nullptr;
   long v = strtol(p, &endPtr, 10);
-  if (endPtr == p) {
+  if (endPtr == p) 
+  {
     return false;
   }
 
@@ -117,30 +121,38 @@ bool parseLegacyL(char *payload, int &layer, int &index) {
   char *p = payload + 1;
   long layerLong = 0;
   long indexLong = 0;
-  if (!parseIntToken(p, layerLong)) {
+  if (!parseIntToken(p, layerLong)) 
+  {
     return false;
   }
-  while (*p != '\0' && isspace(static_cast<unsigned char>(*p))) {
+  while (*p != '\0' && isspace(static_cast<unsigned char>(*p))) 
+  {
     p++;
   }
-  if (*p != ',') {
+  if (*p != ',') 
+  {
     return false;
   }
   p++;
-  if (!parseIntToken(p, indexLong)) {
+  if (!parseIntToken(p, indexLong)) 
+  {
     return false;
   }
-  while (*p != '\0' && isspace(static_cast<unsigned char>(*p))) {
+  while (*p != '\0' && isspace(static_cast<unsigned char>(*p))) 
+  {
     p++;
   }
-  if (*p != '\0') {
+  if (*p != '\0') 
+  {
     return false;
   }
 
-  if (layerLong < 1 || layerLong > NUM_STRIPS) {
+  if (layerLong < 1 || layerLong > NUM_STRIPS) 
+  {
     return false;
   }
-  if (indexLong < 0 || indexLong >= PHYSICAL_LEDS_PER_STRIP) {
+  if (indexLong < 0 || indexLong >= PHYSICAL_LEDS_PER_STRIP) 
+  {
     return false;
   }
 
@@ -149,27 +161,33 @@ bool parseLegacyL(char *payload, int &layer, int &index) {
   return true;
 }
 
-void allOff() {
+void allOff() 
+{
   currentMode = MODE_IDLE;
   FastLED.clear();
   FastLED.show();
 }
 
-void handleCommand(char *payload) {
-  if (payload == nullptr || payload[0] == '\0') {
+void handleCommand(char *payload) 
+{
+  if (payload == nullptr || payload[0] == '\0') 
+  {
     Serial.println(F("ERR:EMPTY"));
     return;
   }
 
-  if (strcmp(payload, "OFF") == 0 || strcmp(payload, "CLEAR") == 0) {
+  if (strcmp(payload, "OFF") == 0 || strcmp(payload, "CLEAR") == 0) 
+  {
     allOff();
     Serial.println(F("OK:OFF"));
     return;
   }
 
-  if (strcmp(payload, "ON") == 0) {
+  if (strcmp(payload, "ON") == 0) 
+  {
     currentMode = MODE_IDLE;
-    for (uint8_t s = 0; s < NUM_STRIPS; s++) {
+    for (uint8_t s = 0; s < NUM_STRIPS; s++) 
+    {
       fill_solid(leds[s], PHYSICAL_LEDS_PER_STRIP, CRGB(255, 255, 255));
     }
     FastLED.show();
@@ -177,7 +195,8 @@ void handleCommand(char *payload) {
     return;
   }
 
-  if (strcmp(payload, "MARQUEE") == 0) {
+  if (strcmp(payload, "MARQUEE") == 0) 
+  {
     currentMode = MODE_MARQUEE;
     marqueePos = 0;
     lastMarqueeMs = millis();
@@ -185,7 +204,8 @@ void handleCommand(char *payload) {
     return;
   }
 
-  if (strcmp(payload, "PING") == 0) {
+  if (strcmp(payload, "PING") == 0) 
+  {
     Serial.println(F("PONG"));
     return;
   }
@@ -197,7 +217,8 @@ void handleCommand(char *payload) {
   int b = 0;
 
   // 主协议：与 PTLControl 一致 <Layer,Index,R,G,B>
-  if (parseRgbSet(payload, layer, index, r, g, b)) {
+  if (parseRgbSet(payload, layer, index, r, g, b)) 
+  {
     currentMode = MODE_IDLE;
     leds[layer - 1][index] = CRGB(
         static_cast<uint8_t>(r),
@@ -209,7 +230,8 @@ void handleCommand(char *payload) {
   }
 
   // 旧协议：<LLayer,Index> 清屏后单点绿
-  if (parseLegacyL(payload, layer, index)) {
+  if (parseLegacyL(payload, layer, index))  
+  {
     currentMode = MODE_IDLE;
     FastLED.clear();
     leds[layer - 1][index] = CRGB(0, 255, 0);
@@ -224,7 +246,8 @@ void handleCommand(char *payload) {
   Serial.println(F("ERR:CMD"));
 }
 
-void initStrips() {
+void initStrips() 
+{
   FastLED.addLeds<WS2812B, STRIP_PIN_1, GRB>(leds[0], PHYSICAL_LEDS_PER_STRIP);
   FastLED.addLeds<WS2812B, STRIP_PIN_2, GRB>(leds[1], PHYSICAL_LEDS_PER_STRIP);
   FastLED.addLeds<WS2812B, STRIP_PIN_3, GRB>(leds[2], PHYSICAL_LEDS_PER_STRIP);

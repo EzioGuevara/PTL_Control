@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>PTLControl.HardwareHost</AssemblyName>
+    <RootNamespace>PTLControl.HardwareHost</RootNamespace>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+  <Target Name="CopyHostToCompatDelivery" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <HostFiles Include="$(TargetDir)PTLControl.HardwareHost.exe;$(TargetDir)PTLControl.HardwareHost.exe.config;$(TargetDir)PTLControl.HardwareHost.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(HostFiles)" DestinationFolder="$(MSBuildProjectDirectory)\..\PTLControl.Compat\PTL_CTRL\net472" SkipUnchangedFiles="true" Condition="Exists('%(HostFiles.Identity)')" />
+  </Target>
+</Project>

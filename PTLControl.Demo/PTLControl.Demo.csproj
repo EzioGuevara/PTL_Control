@@ -12,4 +12,10 @@
     <ProjectReference Include="..\PTLControl.Compat\PTLControl.Compat.csproj" />
   </ItemGroup>
 
+  <Target Name="CopyHardwareHost" AfterTargets="Build">
+    <Copy SourceFiles="..\PTLControl.HardwareHost\bin\$(Configuration)\net472\PTLControl.HardwareHost.exe"
+          DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+
 </Project>

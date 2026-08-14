@@ -32,7 +32,7 @@ namespace PTLControl.Compat.Services
             {
                 TransportType = TransportType,
                 IsConnected = true,
-                Message = "串口已连接：" + port
+                Message = SerialService.Instance.ConnectionMessage
             });
         }
 
@@ -46,7 +46,7 @@ namespace PTLControl.Compat.Services
                 {
                     TransportType = TransportType,
                     IsConnected = false,
-                    Message = "串口已断开"
+                    Message = SerialService.Instance.ConnectionMessage
                 });
             }
         }

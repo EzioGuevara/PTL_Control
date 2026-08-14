@@ -131,6 +131,12 @@ namespace PTLControl.Compat
             }
         }
 
+        /// <summary>最近一次连接结果的可读消息；串口模式返回 HardwareHost 的真实状态。</summary>
+        public static string LastConnectionMessage
+        {
+            get { return TransportRouter.GetLastConnectionMessage(); }
+        }
+
         // ── 核心灯控接口（枚举颜色版，推荐调用方使用）─────────────────────────
         /// <summary>常亮某颗灯（根据 Layer/Index，使用预定义颜色枚举）</summary>
         public static void SetLight(int layer, int index, LedColor color)
@@ -263,8 +269,7 @@ namespace PTLControl.Compat
 
             StopMarquee();
             StopBlinkSingle(layer, index);
-            var cmd = CommandService.FormatCommand(layer, index, r, g, b);
-            TransportRouter.SendSerialCommand(cmd);
+            TransportRouter.SetSerialLight(layer, index, r, g, b);
         }
 
         private static bool SetLightRgb(string key, int r, int g, int b, bool? beep)
@@ -311,44 +316,7 @@ namespace PTLControl.Compat
 
             StopMarquee();
             StopBlinkSingle(layer, index);
-            var cts = new CancellationTokenSource();
-            var blinkKey = BlinkKey(layer, index);
-            lock (_blinkLock)
-                _blinkTasks[blinkKey] = cts;
-
-            var token = cts.Token;
-            var cmdOn  = CommandService.FormatCommand(layer, index, r, g, b);
-            var cmdOff = CommandService.FormatCommand(layer, index, 0, 0, 0);
-
-            Task.Run(async () =>
-            {
-                try
-                {
-                    bool on = true;
-                    TransportRouter.SendSerialCommand(cmdOn);
-                    while (!token.IsCancellationRequested)
-                    {
-                        try { await Task.Delay(intervalMs, token).ConfigureAwait(false); }
-                        catch (TaskCanceledException) { return; }
-                        on = !on;
-                        TransportRouter.SendSerialCommand(on ? cmdOn : cmdOff);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogService.Error("闪烁任务异常：Layer=" + layer + ", Index=" + index, ex);
-                }
-                finally
-                {
-                    lock (_blinkLock)
-                    {
-                        CancellationTokenSource existing;
-                        if (_blinkTasks.TryGetValue(blinkKey, out existing) && ReferenceEquals(existing, cts))
-                            _blinkTasks.Remove(blinkKey);
-                    }
-                    cts.Dispose();
-                }
-            }, token);
+            TransportRouter.SetSerialBlink(layer, index, r, g, b, intervalMs);
         }
 
         private static bool SetBlinkRgb(string key, int r, int g, int b, int intervalMs, bool? beep)
@@ -393,8 +361,7 @@ namespace PTLControl.Compat
 
             StopMarquee();
             StopBlinkSingle(layer, index);
-            var cmd = CommandService.FormatCommand(layer, index, 0, 0, 0);
-            TransportRouter.SendSerialCommand(cmd);
+            TransportRouter.TurnOffSerialLight(layer, index);
         }
 
         /// <summary>根据 Layer/Index 熄灭（不影响其他灯）</summary>
@@ -519,7 +486,7 @@ namespace PTLControl.Compat
 
                 StopMarquee();
                 StopAllBlinks();
-                TransportRouter.SendSerialCommand(CommandService.OffCommand);
+                TransportRouter.AllOffSerial();
             }
         }
 
@@ -537,7 +504,6 @@ namespace PTLControl.Compat
 
             StopMarquee();
             StopAllBlinks();
-            TransportRouter.SendSerialCommand(CommandService.OffCommand);
 
             var config = ConfigService.Load();
             var strips = new List<KeyValuePair<int, int>>(); // Layer → Count
@@ -549,28 +515,7 @@ namespace PTLControl.Compat
                 strips.Add(new KeyValuePair<int, int>(row.Layer, maxIdx + 1));
             }
             if (strips.Count == 0) return;
-
-            _marqueeCts = new CancellationTokenSource();
-            var token = _marqueeCts.Token;
-            Task.Run(async () =>
-            {
-                while (!token.IsCancellationRequested)
-                {
-                    foreach (var strip in strips)
-                    {
-                        int layer = strip.Key;
-                        int count = strip.Value;
-                        for (int i = 0; i < count; i++)
-                        {
-                            if (token.IsCancellationRequested) return;
-                            TransportRouter.SendSerialCommand(CommandService.OffCommand);
-                            TransportRouter.SendSerialCommand(CommandService.FormatCommand(layer, i, r, g, b));
-                            try { await Task.Delay(intervalMs, token).ConfigureAwait(false); }
-                            catch (TaskCanceledException) { return; }
-                        }
-                    }
-                }
-            }, token);
+            TransportRouter.StartSerialMarquee(r, g, b, intervalMs, strips);
         }
 
         // ── 配置 ──────────────────────────────────────────────────────────────────

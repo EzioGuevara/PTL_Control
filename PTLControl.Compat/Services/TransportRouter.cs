@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using PTLControl.Compat.Models;
 
 namespace PTLControl.Compat.Services
@@ -146,6 +147,21 @@ namespace PTLControl.Compat.Services
             active.SendSerialCommand(cmd);
         }
 
+        public static void SetSerialLight(int layer, int index, int r, int g, int b)
+            => SerialService.Instance.SetLight(layer, index, r, g, b);
+
+        public static void SetSerialBlink(int layer, int index, int r, int g, int b, int intervalMs)
+            => SerialService.Instance.SetBlink(layer, index, r, g, b, intervalMs);
+
+        public static void TurnOffSerialLight(int layer, int index)
+            => SerialService.Instance.TurnOff(layer, index);
+
+        public static void AllOffSerial()
+            => SerialService.Instance.AllOff();
+
+        public static void StartSerialMarquee(int r, int g, int b, int intervalMs, IList<KeyValuePair<int, int>> strips)
+            => SerialService.Instance.Marquee(r, g, b, intervalMs, strips);
+
         public static void PublishWirelessTask(WirelessTask task)
         {
             var startup = ConfigService.LoadStartup();
@@ -158,6 +174,14 @@ namespace PTLControl.Compat.Services
         public static DateTime? GetLastHeartbeatUtc()
         {
             return MqttTransport.LastHeartbeatUtc;
+        }
+
+        public static string GetLastConnectionMessage()
+        {
+            var startup = ConfigService.LoadStartup();
+            if (IsMqtt(startup))
+                return MqttTransport.IsConnected ? "MQTT 已连接。" : "MQTT 未连接。";
+            return SerialService.Instance.ConnectionMessage;
         }
 
         private static bool IsMqtt(StartupConfig startup)
